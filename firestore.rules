@@ -1,0 +1,36 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Validation helper
+    function isValidResult(data) {
+      return data.keys().hasAll(['rollNo', 'name', 'clearStatus', 'createdAt']) &&
+        data.rollNo is string && data.rollNo.size() > 0 && data.rollNo.size() <= 50 &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.clearStatus is string && data.clearStatus in ['Cleared', 'Not Cleared', 'Partially Cleared'] &&
+        (data.get('totalMarks', 0) == null || (data.get('totalMarks', 0) is number && data.get('totalMarks', 0) >= 0 && data.get('totalMarks', 0) <= 1000)) &&
+        (data.get('sgpa', 0) == null || (data.get('sgpa', 0) is number && data.get('sgpa', 0) >= 0 && data.get('sgpa', 0) <= 10)) &&
+        (data.get('carrySubjects', '') == null || (data.get('carrySubjects', '') is string && data.get('carrySubjects', '').size() <= 1000));
+    }
+
+    match /results/{resultId} {
+      // For now, allow public reads and writes since no auth was requested,
+      // but enforce rigorous schema validation to prevent abuse.
+      allow read: if true;
+      allow create: if isValidResult(request.resource.data) &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.keys().size() <= 7;
+      
+      allow update: if isValidResult(request.resource.data) &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.keys().size() <= 7;
+        
+      allow delete: if true;
+    }
+  }
+}

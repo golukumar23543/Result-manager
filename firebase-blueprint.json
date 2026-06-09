@@ -1,0 +1,25 @@
+{
+  "entities": {
+    "Result": {
+      "title": "Result",
+      "description": "Student exam result",
+      "type": "object",
+      "properties": {
+        "rollNo": { "type": "string" },
+        "name": { "type": "string" },
+        "totalMarks": { "type": "number" },
+        "sgpa": { "type": "number" },
+        "carrySubjects": { "type": "string" },
+        "clearStatus": { "type": "string", "enum": ["Cleared", "Not Cleared", "Partially Cleared"] },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["rollNo", "name", "clearStatus", "createdAt"]
+    }
+  },
+  "firestore": {
+    "results": {
+      "schema": { "$ref": "#/entities/Result" },
+      "description": "Collection of student results"
+    }
+  }
+}
