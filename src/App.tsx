@@ -62,7 +62,7 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
-    const q = query(collection(db, 'results'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'results'), orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -329,9 +329,9 @@ export default function App() {
             </button>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-700/50">
-            <table className="w-full text-left border-collapse min-w-[700px]">
-              <thead>
+          <div className="overflow-hidden md:overflow-x-auto rounded-xl border border-slate-700/50">
+            <table className="w-full text-left border-collapse block md:table">
+              <thead className="hidden md:table-header-group">
                 <tr className="bg-slate-800/80 text-sky-200 border-b border-slate-700">
                   <th className="p-4 font-semibold w-24">Roll No</th>
                   <th className="p-4 font-semibold">Name</th>
@@ -341,16 +341,16 @@ export default function App() {
                   <th className="p-4 font-semibold w-32">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80">
+              <tbody className="divide-y divide-slate-800/80 block md:table-row-group">
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-sky-400/80 animate-pulse">
+                  <tr className="block md:table-row">
+                    <td colSpan={6} className="p-8 text-center text-sky-400/80 animate-pulse block md:table-cell">
                       🔄 Loading data from Firebase...
                     </td>
                   </tr>
                 ) : filteredResults.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-500">
+                  <tr className="block md:table-row">
+                    <td colSpan={6} className="p-8 text-center text-slate-500 block md:table-cell">
                       📭 No records found
                     </td>
                   </tr>
@@ -358,15 +358,17 @@ export default function App() {
                   filteredResults.map((rec) => (
                     <tr
                       key={rec.id}
-                      className="hover:bg-sky-500/5 transition-colors cursor-pointer group"
+                      className="block md:table-row hover:bg-sky-500/5 transition-colors cursor-pointer group p-4 md:p-0"
                       onClick={() => handleOpenAdmin(rec)}
                     >
-                      <td className="p-4">
+                      <td className="block md:table-cell p-2 md:p-4 border-b border-slate-800/50 md:border-none flex items-center md:table-cell">
+                        <span className="inline-block md:hidden text-slate-400 w-28 text-sm font-medium">Roll No:</span>
                         <strong className="text-yellow-400 group-hover:text-yellow-300 transition-colors">
                           {rec.rollNo}
                         </strong>
                       </td>
-                      <td className="p-4 font-medium text-amber-200/90 flex items-center gap-2">
+                      <td className="block md:table-cell p-2 md:p-4 font-medium text-amber-200/90 flex items-center gap-2 border-b border-slate-800/50 md:border-none">
+                        <span className="inline-block md:hidden text-slate-400 w-28 text-sm font-medium">Name:</span>
                         {rec.name}
                         {rec.pdfData && (
                           <button
@@ -378,18 +380,22 @@ export default function App() {
                           </button>
                         )}
                       </td>
-                      <td className="p-4 text-slate-300">
+                      <td className="block md:table-cell p-2 md:p-4 text-slate-300 border-b border-slate-800/50 md:border-none flex items-center md:table-cell">
+                        <span className="inline-block md:hidden text-slate-400 w-28 text-sm font-medium">Marks:</span>
                         {rec.totalMarks !== null ? `${rec.totalMarks} / 1000` : '—'}
                       </td>
-                      <td className="p-4">
+                      <td className="block md:table-cell p-2 md:p-4 border-b border-slate-800/50 md:border-none flex items-center md:table-cell">
+                        <span className="inline-block md:hidden text-slate-400 w-28 text-sm font-medium">SGPA:</span>
                         <span className="bg-[#0f3b4c] text-sky-300 px-3 py-1 rounded-full text-sm font-medium border border-sky-400/20">
                           {rec.sgpa !== null ? rec.sgpa.toFixed(2) : '—'}
                         </span>
                       </td>
-                      <td className="p-4 text-slate-300">
-                        {rec.carrySubjects ? rec.carrySubjects : '—'}
+                      <td className="block md:table-cell p-2 md:p-4 text-slate-300 border-b border-slate-800/50 md:border-none flex items-start md:table-cell">
+                        <span className="inline-block md:hidden text-slate-400 w-28 text-sm font-medium shrink-0">Carry:</span>
+                        <span className="flex-1">{rec.carrySubjects ? rec.carrySubjects : '—'}</span>
                       </td>
-                      <td className="p-4">
+                      <td className="block md:table-cell p-2 md:p-4 flex items-center md:table-cell">
+                        <span className="inline-block md:hidden text-slate-400 w-28 text-sm font-medium">Status:</span>
                         <span
                           className={`px-3 py-1 rounded-full text-sm font-medium inline-flex items-center gap-1 ${
                             rec.clearStatus === 'Cleared'
