@@ -19,7 +19,7 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import { Search, Plus, Save, Trash2, X, GraduationCap, XCircle } from 'lucide-react';
+import { Search, Plus, Save, Trash2, X, GraduationCap, XCircle, FileText, Upload } from 'lucide-react';
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -32,6 +32,7 @@ interface Result {
   sgpa: number | null;
   carrySubjects: string;
   clearStatus: string;
+  pdfData?: string;
   createdAt?: any;
 }
 
@@ -57,6 +58,8 @@ export default function App() {
   const [sgpa, setSgpa] = useState<string>('');
   const [carrySubjects, setCarrySubjects] = useState('');
   const [clearStatus, setClearStatus] = useState('Cleared');
+  const [pdfData, setPdfData] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'results'), orderBy('createdAt', 'desc'));
@@ -117,6 +120,7 @@ export default function App() {
         setSgpa(pendingEditRec.sgpa !== null ? pendingEditRec.sgpa.toString() : '');
         setCarrySubjects(pendingEditRec.carrySubjects || '');
         setClearStatus(pendingEditRec.clearStatus);
+        setPdfData(pendingEditRec.pdfData || '');
       }
       setIsAdminOpen(true);
     } else {
@@ -139,7 +143,7 @@ export default function App() {
       sMarks = Math.round(sMarks * 100) / 100;
     }
 
-    const record = {
+    const record: any = {
       rollNo,
       name: studentName,
       totalMarks: tMarks,
@@ -147,6 +151,12 @@ export default function App() {
       carrySubjects,
       clearStatus,
     };
+    
+    if (pdfData) {
+      record.pdfData = pdfData;
+    } else {
+      record.pdfData = '';
+    }
 
     try {
       if (editId) {
@@ -177,6 +187,56 @@ export default function App() {
     setSgpa('');
     setCarrySubjects('');
     setClearStatus('Cleared');
+    setPdfData('');
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      handleAdminAlert('Please select a PDF file', true);
+      return;
+    }
+
+    // ~1.5MB limit to fit in Firestore
+    if (file.size > 1.5 * 1024 * 1024) {
+      handleAdminAlert('File size must be under 1.5MB', true);
+      return;
+    }
+
+    setIsUploading(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPdfData(event.target?.result as string);
+      setIsUploading(false);
+    };
+    reader.onerror = () => {
+      handleAdminAlert('Failed to read file', true);
+      setIsUploading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const openPdf = (e: React.MouseEvent, base64Data?: string) => {
+    e.stopPropagation();
+    if (!base64Data) return;
+    
+    try {
+      const byteString = atob(base64Data.split(',')[1]);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (err) {
+      console.error('Error opening PDF:', err);
+      // Fallback
+      window.open(base64Data, '_blank');
+    }
   };
 
   const loadSampleData = async () => {
@@ -306,7 +366,18 @@ export default function App() {
                           {rec.rollNo}
                         </strong>
                       </td>
-                      <td className="p-4 font-medium text-amber-200/90">{rec.name}</td>
+                      <td className="p-4 font-medium text-amber-200/90 flex items-center gap-2">
+                        {rec.name}
+                        {rec.pdfData && (
+                          <button
+                            onClick={(e) => openPdf(e, rec.pdfData)}
+                            className="p-1.5 bg-sky-500/20 text-sky-400 hover:bg-sky-500/40 rounded-lg transition-colors border border-sky-500/30 group-hover:border-sky-400/50"
+                            title="View Result PDF"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
                       <td className="p-4 text-slate-300">
                         {rec.totalMarks !== null ? `${rec.totalMarks} / 1000` : '—'}
                       </td>
@@ -498,6 +569,46 @@ export default function App() {
                   <option value="Not Cleared">❌ Not Cleared</option>
                   <option value="Partially Cleared">🔄 Partially Cleared</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-1.5 ml-1">📄 Result PDF (Optional, max 1.5MB)</label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="pdf-upload"
+                  />
+                  <label
+                    htmlFor="pdf-upload"
+                    className="w-full flex items-center justify-center gap-2 bg-slate-950 border border-slate-700 hover:border-sky-500 rounded-xl px-4 py-3 text-slate-400 hover:text-sky-400 transition-all cursor-pointer border-dashed"
+                  >
+                    {isUploading ? (
+                      <span className="animate-pulse">Uploading...</span>
+                    ) : pdfData ? (
+                      <>
+                        <FileText className="w-5 h-5 text-sky-400" />
+                        <span className="text-sky-400">PDF Attached</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5" />
+                        <span>Upload PDF</span>
+                      </>
+                    )}
+                  </label>
+                  {pdfData && (
+                    <button
+                      type="button"
+                      onClick={() => setPdfData('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-rose-400 hover:text-rose-300 p-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="pt-4 flex flex-col gap-3">
