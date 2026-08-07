@@ -19,7 +19,7 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import { Search, Plus, Save, Trash2, X, GraduationCap, XCircle, FileText, Upload } from 'lucide-react';
+import { Search, Plus, Save, Trash2, X, GraduationCap, XCircle, FileText, Upload, Download } from 'lucide-react';
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -218,6 +218,22 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
+  const downloadPdf = (e: React.MouseEvent, base64Data?: string, rollNo?: string) => {
+    e.stopPropagation();
+    if (!base64Data) return;
+    
+    try {
+      const a = document.createElement('a');
+      a.href = base64Data;
+      a.download = `Result_${rollNo || 'document'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Error downloading PDF:', err);
+    }
+  };
+
   const openPdf = (e: React.MouseEvent, base64Data?: string) => {
     e.stopPropagation();
     if (!base64Data) return;
@@ -371,13 +387,22 @@ export default function App() {
                         <span className="inline-block md:hidden text-slate-400 w-28 text-sm font-medium">Name:</span>
                         {rec.name}
                         {rec.pdfData && (
-                          <button
-                            onClick={(e) => openPdf(e, rec.pdfData)}
-                            className="p-1.5 bg-sky-500/20 text-sky-400 hover:bg-sky-500/40 rounded-lg transition-colors border border-sky-500/30 group-hover:border-sky-400/50"
-                            title="View Result PDF"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </button>
+                          <div className="flex gap-1 ml-auto md:ml-0">
+                            <button
+                              onClick={(e) => openPdf(e, rec.pdfData)}
+                              className="p-1.5 bg-sky-500/20 text-sky-400 hover:bg-sky-500/40 rounded-lg transition-colors border border-sky-500/30 group-hover:border-sky-400/50"
+                              title="View Result PDF"
+                            >
+                              <FileText className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => downloadPdf(e, rec.pdfData, rec.rollNo)}
+                              className="p-1.5 bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/40 rounded-lg transition-colors border border-indigo-500/30 group-hover:border-indigo-400/50"
+                              title="Download PDF"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                          </div>
                         )}
                       </td>
                       <td className="block md:table-cell p-2 md:p-4 text-slate-300 border-b border-slate-800/50 md:border-none flex items-center md:table-cell">
