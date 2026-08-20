@@ -45,6 +45,7 @@ export default function App() {
   const [results, setResults] = useState<Result[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -105,53 +106,65 @@ export default function App() {
     }, 3000);
   };
 
-  const handleOpenAdmin = (rec?: Result | React.MouseEvent | React.SyntheticEvent) => {
-    if (rec && !('nativeEvent' in rec)) {
-      setPendingEditRec(rec as Result);
-    } else {
-      setPendingEditRec(null);
+  const openAdminWithRecord = (rec?: Result | null) => {
+    resetForm();
+    if (rec) {
+      if (rec.id) setEditId(rec.id);
+      if (rec.rollNo) setRollNo(rec.rollNo);
+      if (rec.name) setStudentName(rec.name);
+      if (rec.semester) setSemester(rec.semester);
+      if (rec.examType) setExamType(rec.examType);
+      if (rec.totalMarks !== undefined && rec.totalMarks !== null) setTotalMarks(rec.totalMarks.toString());
+      if (rec.sgpa !== undefined && rec.sgpa !== null) setSgpa(rec.sgpa.toString());
+      if (rec.carrySubjects) setCarrySubjects(rec.carrySubjects);
+      if (rec.clearStatus) setClearStatus(rec.clearStatus);
+      if (rec.pdfData) setPdfData(rec.pdfData);
     }
-    setIsPasswordModalOpen(true);
+    setIsAdminOpen(true);
+  };
+
+  const uploadProfileImage = async (base64Image: string) => {
+    if (!selectedStudent) return;
+    try {
+      const updates = selectedStudent.results.map(r =>
+        updateDoc(doc(db, 'results', r.id!), { profileImage: base64Image })
+      );
+      await Promise.all(updates);
+      setSelectedStudent(prev => prev ? { ...prev, profileImage: base64Image } : prev);
+      setPendingProfileImage(null);
+      handleAdminAlert('✅ Profile photo updated!', false);
+    } catch (err) {
+      console.error(err);
+      handleAdminAlert('❌ Failed to update photo', true);
+      setPendingProfileImage(null);
+    }
+  };
+
+  const handleOpenAdmin = (rec?: Result | React.MouseEvent | React.SyntheticEvent) => {
+    const editRec = (rec && !('nativeEvent' in rec)) ? (rec as Result) : null;
+    
+    if (isAdminAuthenticated) {
+      openAdminWithRecord(editRec);
+    } else {
+      setPendingEditRec(editRec);
+      setIsPasswordModalOpen(true);
+    }
   };
 
   const handlePasswordSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (passwordInput === 'golu@12') {
+      setIsAdminAuthenticated(true);
       setIsPasswordModalOpen(false);
       setPasswordInput('');
       setPasswordError('');
       
-      if (pendingProfileImage && selectedStudent) {
-        try {
-          const updates = selectedStudent.results.map(r =>
-            updateDoc(doc(db, 'results', r.id!), { profileImage: pendingProfileImage })
-          );
-          await Promise.all(updates);
-          setSelectedStudent(prev => prev ? { ...prev, profileImage: pendingProfileImage } : prev);
-          setPendingProfileImage(null);
-          handleAdminAlert('✅ Profile photo updated!', false);
-        } catch (err) {
-          console.error(err);
-          handleAdminAlert('❌ Failed to update photo', true);
-          setPendingProfileImage(null);
-        }
+      if (pendingProfileImage) {
+        await uploadProfileImage(pendingProfileImage);
         return;
       }
 
-      resetForm();
-      if (pendingEditRec) {
-        if (pendingEditRec.id) setEditId(pendingEditRec.id);
-        if (pendingEditRec.rollNo) setRollNo(pendingEditRec.rollNo);
-        if (pendingEditRec.name) setStudentName(pendingEditRec.name);
-        if (pendingEditRec.semester) setSemester(pendingEditRec.semester);
-        if (pendingEditRec.examType) setExamType(pendingEditRec.examType);
-        if (pendingEditRec.totalMarks !== undefined && pendingEditRec.totalMarks !== null) setTotalMarks(pendingEditRec.totalMarks.toString());
-        if (pendingEditRec.sgpa !== undefined && pendingEditRec.sgpa !== null) setSgpa(pendingEditRec.sgpa.toString());
-        if (pendingEditRec.carrySubjects) setCarrySubjects(pendingEditRec.carrySubjects);
-        if (pendingEditRec.clearStatus) setClearStatus(pendingEditRec.clearStatus);
-        if (pendingEditRec.pdfData) setPdfData(pendingEditRec.pdfData);
-      }
-      setIsAdminOpen(true);
+      openAdminWithRecord(pendingEditRec);
     } else {
       setPasswordError('Incorrect password');
     }
@@ -243,9 +256,14 @@ export default function App() {
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
-      setPendingProfileImage(event.target?.result as string);
-      setIsPasswordModalOpen(true);
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      if (isAdminAuthenticated) {
+        await uploadProfileImage(base64);
+      } else {
+        setPendingProfileImage(base64);
+        setIsPasswordModalOpen(true);
+      }
     };
     reader.onerror = () => {
       handleAdminAlert('Failed to read image file', true);
