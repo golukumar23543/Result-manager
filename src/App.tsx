@@ -368,9 +368,9 @@ export default function App() {
   }, [results, searchTerm]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0f1e] to-[#0f172f] text-slate-200 p-6 font-sans">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <header className="bg-slate-800/80 rounded-3xl p-6 md:p-8 flex flex-col md:flex-row justify-between items-center gap-4 border border-sky-400/30 shadow-xl backdrop-blur-sm">
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0f1e] to-[#0f172f] text-slate-200 p-3 sm:p-6 font-sans">
+      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
+        <header className="bg-slate-800/80 rounded-2xl md:rounded-3xl p-5 md:p-8 flex flex-col md:flex-row justify-between items-center gap-4 border border-sky-400/30 shadow-xl backdrop-blur-sm">
           <div className="space-y-1 text-center md:text-left">
             <h1
               className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-purple-400 bg-clip-text text-transparent cursor-pointer select-none flex items-center justify-center md:justify-start gap-2"
@@ -386,7 +386,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className="bg-slate-900/85 border border-sky-400/25 rounded-3xl p-6 md:p-8 shadow-2xl backdrop-blur-md">
+        <main className="bg-slate-900/85 border border-sky-400/25 rounded-2xl md:rounded-3xl p-4 sm:p-6 md:p-8 shadow-2xl backdrop-blur-md">
           <h2 className="text-xl font-semibold border-l-4 border-sky-400 pl-4 mb-6 flex items-center gap-2">
             📋 Student Profiles
           </h2>
@@ -446,14 +446,14 @@ export default function App() {
                       className="block md:table-row hover:bg-sky-500/5 transition-colors cursor-pointer group p-4 md:p-0"
                       onClick={() => setSelectedStudent(student)}
                     >
-                      <td className="block md:table-cell p-2 md:p-4 border-b border-slate-800/50 md:border-none flex items-center md:table-cell">
-                        <span className="inline-block md:hidden text-slate-400 w-28 text-sm font-medium">Roll No:</span>
+                      <td className="block md:table-cell p-3 md:p-4 border-b border-slate-800/50 md:border-none flex items-center md:table-cell">
+                        <span className="inline-block md:hidden text-slate-400 w-24 sm:w-28 text-sm font-medium">Roll No:</span>
                         <strong className="text-yellow-400 group-hover:text-yellow-300 transition-colors">
                           {student.rollNo}
                         </strong>
                       </td>
-                      <td className="block md:table-cell p-2 md:p-4 font-medium text-amber-200/90 flex items-center gap-3 border-b border-slate-800/50 md:border-none">
-                        <span className="inline-block md:hidden text-slate-400 w-28 text-sm font-medium">Name:</span>
+                      <td className="block md:table-cell p-3 md:p-4 font-medium text-amber-200/90 flex items-center gap-3 border-b border-slate-800/50 md:border-none">
+                        <span className="inline-block md:hidden text-slate-400 w-24 sm:w-28 text-sm font-medium">Name:</span>
                         {student.profileImage ? (
                           <img src={student.profileImage} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-700/50 shrink-0" />
                         ) : (
@@ -461,15 +461,15 @@ export default function App() {
                             <User className="w-4 h-4 text-slate-500" />
                           </div>
                         )}
-                        {student.name}
+                        <span className="truncate">{student.name}</span>
                       </td>
-                      <td className="block md:table-cell p-2 md:p-4 text-slate-300 border-b border-slate-800/50 md:border-none flex items-center md:table-cell">
-                        <span className="inline-block md:hidden text-slate-400 w-28 text-sm font-medium">Records:</span>
-                        <span className="bg-[#0f3b4c] text-sky-300 px-3 py-1 rounded-full text-sm font-medium border border-sky-400/20">
+                      <td className="block md:table-cell p-3 md:p-4 text-slate-300 border-b border-slate-800/50 md:border-none flex items-center md:table-cell">
+                        <span className="inline-block md:hidden text-slate-400 w-24 sm:w-28 text-sm font-medium">Records:</span>
+                        <span className="bg-[#0f3b4c] text-sky-300 px-3 py-1 rounded-full text-xs sm:text-sm font-medium border border-sky-400/20">
                           {student.results.length} Results
                         </span>
                       </td>
-                      <td className="block md:table-cell p-2 md:p-4 text-right border-b border-slate-800/50 md:border-none">
+                      <td className="block md:table-cell p-3 md:p-4 text-right md:text-right border-b border-slate-800/50 md:border-none">
                          <span className="text-sky-400 text-sm font-semibold group-hover:underline">View Profile &rarr;</span>
                       </td>
                     </tr>
@@ -497,27 +497,27 @@ export default function App() {
 
       {/* Student Profile Modal */}
       {selectedStudent && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-4xl rounded-3xl p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-4xl rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl relative max-h-[95vh] sm:max-h-[90vh] flex flex-col">
             
-            <div className="flex justify-between items-start mb-6 shrink-0">
-              <div className="flex items-center gap-4">
+            <div className="flex justify-between items-start mb-5 sm:mb-6 shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4">
                 <div className="relative group">
                   {selectedStudent.profileImage ? (
-                    <img src={selectedStudent.profileImage} alt={selectedStudent.name} className="w-14 h-14 rounded-2xl object-cover border border-sky-500/50 shadow-lg" />
+                    <img src={selectedStudent.profileImage} alt={selectedStudent.name} className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl object-cover border border-sky-500/50 shadow-lg" />
                   ) : (
-                    <div className="bg-sky-500/20 p-3 rounded-2xl border border-sky-500/30 w-14 h-14 flex items-center justify-center shadow-lg">
-                      <User className="w-8 h-8 text-sky-400" />
+                    <div className="bg-sky-500/20 p-2 sm:p-3 rounded-xl sm:rounded-2xl border border-sky-500/30 w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center shadow-lg">
+                      <User className="w-6 h-6 sm:w-8 sm:h-8 text-sky-400" />
                     </div>
                   )}
-                  <label className="absolute inset-0 bg-slate-950/70 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity backdrop-blur-sm border border-sky-400/50">
+                  <label className="absolute inset-0 bg-slate-950/70 rounded-xl sm:rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity backdrop-blur-sm border border-sky-400/50">
                     <Upload className="w-5 h-5 text-white" />
                     <input type="file" accept="image/*" className="hidden" onChange={handleProfileImageSelect} />
                   </label>
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-100">{selectedStudent.name}</h2>
-                  <p className="text-sky-400 font-mono mt-1">{selectedStudent.rollNo}</p>
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-100 truncate max-w-[200px] sm:max-w-[400px]">{selectedStudent.name}</h2>
+                  <p className="text-sky-400 font-mono mt-0.5 sm:mt-1 text-sm sm:text-base">{selectedStudent.rollNo}</p>
                 </div>
               </div>
               <button
@@ -534,7 +534,7 @@ export default function App() {
                   const semResults = selectedStudent.results.filter(r => (r.semester || 'Semester 1') === sem);
                   
                   return (
-                    <div key={sem} className="bg-slate-950/50 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4">
+                    <div key={sem} className="bg-slate-950/50 border border-slate-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 flex flex-col gap-3 sm:gap-4">
                       <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
                         <BookOpen className="w-5 h-5 text-indigo-400" />
                         <h3 className="font-bold text-lg text-indigo-100">{sem}</h3>
@@ -646,8 +646,8 @@ export default function App() {
 
       {/* Password Modal Overlay */}
       {isPasswordModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative">
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[60] flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-sm rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-2xl relative">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-sky-400 flex items-center gap-2">
                 🔒 Admin Access
@@ -693,8 +693,8 @@ export default function App() {
 
       {/* Admin Panel Overlay */}
       {isAdminOpen && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[70] flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-lg rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-2xl relative max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-sky-400 flex items-center gap-2">
                 🔐 ADMIN PANEL
