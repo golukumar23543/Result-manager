@@ -57,6 +57,13 @@ export default function App() {
   const [pendingEditRec, setPendingEditRec] = useState<Result | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<StudentGroup | null>(null);
   const [pendingProfileImage, setPendingProfileImage] = useState<string | null>(null);
+  const [pendingInlinePdf, setPendingInlinePdf] = useState<{
+    base64: string;
+    student: StudentGroup;
+    semester: string;
+    examType: string;
+    existingId: string | null;
+  } | null>(null);
 
   // Form State
   const [editId, setEditId] = useState<string | null>(null);
@@ -164,6 +171,11 @@ export default function App() {
         return;
       }
 
+      if (pendingInlinePdf) {
+        await processInlinePdf(pendingInlinePdf);
+        return;
+      }
+
       openAdminWithRecord(pendingEditRec);
     } else {
       setPasswordError('Incorrect password');
@@ -178,9 +190,9 @@ export default function App() {
     }
 
     let formattedRollNo = rollNo.trim();
-    if (!formattedRollNo.startsWith('892510')) {
+    if (formattedRollNo.length <= 3 && !isNaN(Number(formattedRollNo))) {
       let suffix = formattedRollNo;
-      if (suffix.length === 1 && !isNaN(Number(suffix))) {
+      if (suffix.length === 1) {
         suffix = '0' + suffix;
       }
       formattedRollNo = '892510' + suffix;
@@ -243,6 +255,67 @@ export default function App() {
     setCarrySubjects('');
     setClearStatus('Cleared');
     setPdfData('');
+  };
+
+  const processInlinePdf = async (data: NonNullable<typeof pendingInlinePdf>) => {
+    try {
+      if (data.existingId) {
+        await updateDoc(doc(db, 'results', data.existingId), { pdfData: data.base64 });
+        handleAdminAlert('✅ PDF Updated successfully!', false);
+      } else {
+        await addDoc(collection(db, 'results'), {
+          rollNo: data.student.rollNo,
+          name: data.student.name,
+          semester: data.semester,
+          examType: data.examType,
+          totalMarks: null,
+          sgpa: null,
+          carrySubjects: '',
+          clearStatus: 'Cleared',
+          pdfData: data.base64,
+          profileImage: data.student.profileImage || '',
+          createdAt: serverTimestamp()
+        });
+        handleAdminAlert('✅ Result Created with PDF!', false);
+      }
+      setPendingInlinePdf(null);
+    } catch (err) {
+      console.error(err);
+      handleAdminAlert('❌ Failed to upload PDF', true);
+      setPendingInlinePdf(null);
+    }
+  };
+
+  const handleInlinePdfSelect = (e: React.ChangeEvent<HTMLInputElement>, student: StudentGroup, semester: string, examType: string, existingId: string | null) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      handleAdminAlert('Please select a PDF file', true);
+      e.target.value = '';
+      return;
+    }
+
+    if (file.size > 1.5 * 1024 * 1024) {
+      handleAdminAlert('PDF must be under 1.5MB', true);
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      const data = { base64, student, semester, examType, existingId };
+      
+      if (isAdminAuthenticated) {
+        await processInlinePdf(data);
+      } else {
+        setPendingInlinePdf(data);
+        setIsPasswordModalOpen(true);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -382,7 +455,7 @@ export default function App() {
       }
       groups.get(r.rollNo)!.results.push(r);
     });
-    return Array.from(groups.values());
+    return Array.from(groups.values()).sort((a, b) => a.rollNo.localeCompare(b.rollNo));
   }, [results, searchTerm]);
 
   return (
@@ -434,9 +507,9 @@ export default function App() {
             </button>
           </div>
 
-          <div className="overflow-hidden md:overflow-x-auto rounded-xl border border-slate-700/50">
-            <table className="w-full text-left border-collapse block md:table">
-              <thead className="hidden md:table-header-group">
+          <div className="overflow-x-auto rounded-xl border border-slate-700/50">
+            <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
+              <thead>
                 <tr className="bg-slate-800/80 text-sky-200 border-b border-slate-700">
                   <th className="p-4 font-semibold w-32">Roll No</th>
                   <th className="p-4 font-semibold">Student Name</th>
@@ -444,16 +517,16 @@ export default function App() {
                   <th className="p-4 font-semibold w-32 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80 block md:table-row-group">
+              <tbody className="divide-y divide-slate-800/80">
                 {isLoading ? (
-                  <tr className="block md:table-row">
-                    <td colSpan={4} className="p-8 text-center text-sky-400/80 animate-pulse block md:table-cell">
+                  <tr>
+                    <td colSpan={4} className="p-8 text-center text-sky-400/80 animate-pulse">
                       🔄 Loading data from Firebase...
                     </td>
                   </tr>
                 ) : groupedStudents.length === 0 ? (
-                  <tr className="block md:table-row">
-                    <td colSpan={4} className="p-8 text-center text-slate-500 block md:table-cell">
+                  <tr>
+                    <td colSpan={4} className="p-8 text-center text-slate-500">
                       📭 No students found
                     </td>
                   </tr>
@@ -461,17 +534,15 @@ export default function App() {
                   groupedStudents.map((student) => (
                     <tr
                       key={student.rollNo}
-                      className="block md:table-row hover:bg-sky-500/5 transition-colors cursor-pointer group p-4 md:p-0"
+                      className="hover:bg-sky-500/5 transition-colors cursor-pointer group"
                       onClick={() => setSelectedStudent(student)}
                     >
-                      <td className="block md:table-cell p-3 md:p-4 border-b border-slate-800/50 md:border-none flex items-center md:table-cell">
-                        <span className="inline-block md:hidden text-slate-400 w-24 sm:w-28 text-sm font-medium">Roll No:</span>
+                      <td className="p-4">
                         <strong className="text-yellow-400 group-hover:text-yellow-300 transition-colors">
                           {student.rollNo}
                         </strong>
                       </td>
-                      <td className="block md:table-cell p-3 md:p-4 font-medium text-amber-200/90 flex items-center gap-3 border-b border-slate-800/50 md:border-none">
-                        <span className="inline-block md:hidden text-slate-400 w-24 sm:w-28 text-sm font-medium">Name:</span>
+                      <td className="p-4 font-medium text-amber-200/90 flex items-center gap-3">
                         {student.profileImage ? (
                           <img src={student.profileImage} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-700/50 shrink-0" />
                         ) : (
@@ -479,15 +550,14 @@ export default function App() {
                             <User className="w-4 h-4 text-slate-500" />
                           </div>
                         )}
-                        <span className="truncate">{student.name}</span>
+                        <span className="truncate max-w-[150px] sm:max-w-none">{student.name}</span>
                       </td>
-                      <td className="block md:table-cell p-3 md:p-4 text-slate-300 border-b border-slate-800/50 md:border-none flex items-center md:table-cell">
-                        <span className="inline-block md:hidden text-slate-400 w-24 sm:w-28 text-sm font-medium">Records:</span>
+                      <td className="p-4 text-slate-300">
                         <span className="bg-[#0f3b4c] text-sky-300 px-3 py-1 rounded-full text-xs sm:text-sm font-medium border border-sky-400/20">
                           {student.results.length} Results
                         </span>
                       </td>
-                      <td className="block md:table-cell p-3 md:p-4 text-right md:text-right border-b border-slate-800/50 md:border-none">
+                      <td className="p-4 text-right">
                          <span className="text-sky-400 text-sm font-semibold group-hover:underline">View Profile &rarr;</span>
                       </td>
                     </tr>
@@ -561,23 +631,31 @@ export default function App() {
                       <div className="space-y-4">
                         {['Regular', 'Compartment'].map(type => {
                           const res = semResults.find(r => (r.examType || 'Regular') === type);
+                          const displayName = type === 'Regular' ? 'Final Exam Result' : 'Compartment Exam Result';
                           
                           if (!res) {
                             return (
                               <div key={type} className="border border-dashed border-slate-700/50 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/20">
                                 <div className="flex items-center gap-2">
                                   <span className={`w-2 h-2 rounded-full ${type === 'Regular' ? 'bg-sky-500/50' : 'bg-purple-500/50'}`}></span>
-                                  <span className="text-slate-500 text-sm font-medium">{type} Result Pending</span>
+                                  <span className="text-slate-500 text-sm font-medium">{displayName} Pending</span>
                                 </div>
-                                <button
-                                  onClick={() => {
-                                    setSelectedStudent(null);
-                                    handleOpenAdmin({ rollNo: selectedStudent.rollNo, name: selectedStudent.name, semester: sem, examType: type } as any);
-                                  }}
-                                  className="text-sky-400 hover:text-sky-300 text-xs font-bold px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 rounded-lg transition-colors whitespace-nowrap self-start sm:self-auto"
-                                >
-                                  + Add {type}
-                                </button>
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                  <label className="flex-1 sm:flex-none text-emerald-400 hover:text-emerald-300 text-xs font-bold px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-1 border border-emerald-500/20">
+                                    <Upload className="w-3.5 h-3.5" />
+                                    Upload PDF
+                                    <input type="file" accept="application/pdf" className="hidden" onChange={(e) => handleInlinePdfSelect(e, selectedStudent, sem, type, null)} />
+                                  </label>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedStudent(null);
+                                      handleOpenAdmin({ rollNo: selectedStudent.rollNo, name: selectedStudent.name, semester: sem, examType: type } as any);
+                                    }}
+                                    className="flex-1 sm:flex-none text-sky-400 hover:text-sky-300 text-xs font-bold px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 rounded-lg transition-colors border border-sky-500/20"
+                                  >
+                                    + Add Details
+                                  </button>
+                                </div>
                               </div>
                             );
                           }
@@ -588,18 +666,24 @@ export default function App() {
                                 <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
                                   (res.examType || 'Regular') === 'Regular' ? 'bg-sky-900/40 text-sky-300 border-sky-700/50' : 'bg-purple-900/40 text-purple-300 border-purple-700/50'
                                 }`}>
-                                  {res.examType || 'Regular'}
+                                  {displayName}
                                 </span>
                                 
-                                <button
-                                  onClick={() => {
-                                    setSelectedStudent(null);
-                                    handleOpenAdmin(res);
-                                  }}
-                                  className="text-slate-500 hover:text-sky-400 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  Edit ✏️
-                                </button>
+                                <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                  <label className="text-emerald-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded border border-emerald-500/20">
+                                    <Upload className="w-3 h-3" /> PDF
+                                    <input type="file" accept="application/pdf" className="hidden" onChange={(e) => handleInlinePdfSelect(e, selectedStudent, sem, type, res.id || null)} />
+                                  </label>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedStudent(null);
+                                      handleOpenAdmin(res);
+                                    }}
+                                    className="text-sky-400 hover:text-sky-300 text-xs flex items-center gap-1 bg-sky-500/10 hover:bg-sky-500/20 px-2 py-1 rounded border border-sky-500/20"
+                                  >
+                                    Edit ✏️
+                                  </button>
+                                </div>
                               </div>
 
                               <div className="grid grid-cols-2 gap-2 text-sm mb-3">
@@ -720,6 +804,7 @@ export default function App() {
               <button
                 onClick={() => {
                   setIsAdminOpen(false);
+                  setIsAdminAuthenticated(false);
                   resetForm();
                 }}
                 className="text-slate-400 hover:text-rose-400 transition-colors p-2 rounded-full hover:bg-slate-800"
@@ -729,7 +814,7 @@ export default function App() {
             </div>
 
             <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-400 mb-1.5 ml-1">📚 Semester</label>
                   <select
@@ -779,7 +864,7 @@ export default function App() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-400 mb-1.5 ml-1">📊 Marks /1000</label>
                   <input
@@ -872,7 +957,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="pt-4 flex flex-col gap-3">
+              <div className="pt-4">
                 <button
                   type="submit"
                   className="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2"
@@ -880,16 +965,6 @@ export default function App() {
                   <Save className="w-5 h-5" />
                   {editId ? 'Update Record' : 'Save Record'}
                 </button>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={deleteAllRecords}
-                    className="col-span-2 bg-rose-950 hover:bg-rose-900 border border-rose-900/50 text-rose-400 px-4 py-2.5 rounded-xl transition-colors font-medium text-sm flex items-center justify-center gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" /> Delete All
-                  </button>
-                </div>
               </div>
             </form>
           </div>
