@@ -428,16 +428,21 @@ export default function App() {
     }
   };
 
-  const deleteAllRecords = async () => {
-    if (!confirm('⚠️ DELETE ALL RECORDS? This cannot be undone!')) return;
-    try {
-      const snapshot = await getDocs(collection(db, 'results'));
-      snapshot.forEach(async (document) => {
-        await deleteDoc(doc(db, 'results', document.id));
-      });
-      handleAdminAlert('✅ All records deleted!', false);
-    } catch (err) {
-      handleAdminAlert('❌ Failed to delete!', true);
+  const handleDeleteResult = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isAdminAuthenticated) {
+      handleAdminAlert('Please login as admin to delete records', true);
+      setIsPasswordModalOpen(true);
+      return;
+    }
+    
+    if (confirm('Are you sure you want to delete this result?')) {
+      try {
+        await deleteDoc(doc(db, 'results', id));
+        handleAdminAlert('✅ Result deleted!', false);
+      } catch (err) {
+        handleAdminAlert('❌ Failed to delete result!', true);
+      }
     }
   };
 
@@ -457,6 +462,30 @@ export default function App() {
     });
     return Array.from(groups.values()).sort((a, b) => a.rollNo.localeCompare(b.rollNo));
   }, [results, searchTerm]);
+
+  useEffect(() => {
+    if (selectedStudent) {
+      const fresh = groupedStudents.find(g => g.rollNo === selectedStudent.rollNo);
+      if (fresh) {
+        if (fresh !== selectedStudent) setSelectedStudent(fresh);
+      } else {
+        setSelectedStudent(null);
+      }
+    }
+  }, [groupedStudents, selectedStudent]);
+
+  const deleteAllRecords = async () => {
+    if (!confirm('⚠️ DELETE ALL RECORDS? This cannot be undone!')) return;
+    try {
+      const snapshot = await getDocs(collection(db, 'results'));
+      snapshot.forEach(async (document) => {
+        await deleteDoc(doc(db, 'results', document.id));
+      });
+      handleAdminAlert('✅ All records deleted!', false);
+    } catch (err) {
+      handleAdminAlert('❌ Failed to delete!', true);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0f1e] to-[#0f172f] text-slate-200 p-3 sm:p-6 font-sans">
@@ -662,14 +691,14 @@ export default function App() {
 
                           return (
                             <div key={res.id} className="bg-slate-800/60 rounded-xl p-4 border border-slate-700/50 relative group">
-                              <div className="flex justify-between items-start mb-3">
+                              <div className="flex flex-col xl:flex-row xl:justify-between items-start gap-2 xl:gap-0 mb-3">
                                 <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
                                   (res.examType || 'Regular') === 'Regular' ? 'bg-sky-900/40 text-sky-300 border-sky-700/50' : 'bg-purple-900/40 text-purple-300 border-purple-700/50'
                                 }`}>
                                   {displayName}
                                 </span>
                                 
-                                <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                   <label className="text-emerald-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded border border-emerald-500/20">
                                     <Upload className="w-3 h-3" /> PDF
                                     <input type="file" accept="application/pdf" className="hidden" onChange={(e) => handleInlinePdfSelect(e, selectedStudent, sem, type, res.id || null)} />
@@ -682,6 +711,12 @@ export default function App() {
                                     className="text-sky-400 hover:text-sky-300 text-xs flex items-center gap-1 bg-sky-500/10 hover:bg-sky-500/20 px-2 py-1 rounded border border-sky-500/20"
                                   >
                                     Edit ✏️
+                                  </button>
+                                  <button
+                                    onClick={(e) => handleDeleteResult(res.id as string, e)}
+                                    className="text-rose-400 hover:text-rose-300 text-xs flex items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded border border-rose-500/20"
+                                  >
+                                    <Trash2 className="w-3 h-3" /> Delete
                                   </button>
                                 </div>
                               </div>
