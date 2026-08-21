@@ -64,6 +64,7 @@ export default function App() {
     examType: string;
     existingId: string | null;
   } | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Form State
   const [editId, setEditId] = useState<string | null>(null);
@@ -173,6 +174,17 @@ export default function App() {
 
       if (pendingInlinePdf) {
         await processInlinePdf(pendingInlinePdf);
+        return;
+      }
+
+      if (pendingDeleteId) {
+        try {
+          await deleteDoc(doc(db, 'results', pendingDeleteId));
+          handleAdminAlert('✅ Result deleted!', false);
+        } catch (err) {
+          handleAdminAlert('❌ Failed to delete result!', true);
+        }
+        setPendingDeleteId(null);
         return;
       }
 
@@ -432,17 +444,16 @@ export default function App() {
     e.stopPropagation();
     if (!isAdminAuthenticated) {
       handleAdminAlert('Please login as admin to delete records', true);
+      setPendingDeleteId(id);
       setIsPasswordModalOpen(true);
       return;
     }
     
-    if (confirm('Are you sure you want to delete this result?')) {
-      try {
-        await deleteDoc(doc(db, 'results', id));
-        handleAdminAlert('✅ Result deleted!', false);
-      } catch (err) {
-        handleAdminAlert('❌ Failed to delete result!', true);
-      }
+    try {
+      await deleteDoc(doc(db, 'results', id));
+      handleAdminAlert('✅ Result deleted!', false);
+    } catch (err) {
+      handleAdminAlert('❌ Failed to delete result!', true);
     }
   };
 
@@ -475,7 +486,9 @@ export default function App() {
   }, [groupedStudents, selectedStudent]);
 
   const deleteAllRecords = async () => {
-    if (!confirm('⚠️ DELETE ALL RECORDS? This cannot be undone!')) return;
+    // Note: confirm might be blocked in iframes
+    const isConfirmed = window.confirm('⚠️ DELETE ALL RECORDS? This cannot be undone!');
+    if (!isConfirmed) return;
     try {
       const snapshot = await getDocs(collection(db, 'results'));
       snapshot.forEach(async (document) => {
@@ -669,8 +682,8 @@ export default function App() {
                                   <span className={`w-2 h-2 rounded-full ${type === 'Regular' ? 'bg-sky-500/50' : 'bg-purple-500/50'}`}></span>
                                   <span className="text-slate-500 text-sm font-medium">{displayName} Pending</span>
                                 </div>
-                                <div className="flex items-center gap-2 w-full sm:w-auto">
-                                  <label className="flex-1 sm:flex-none text-emerald-400 hover:text-emerald-300 text-xs font-bold px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-1 border border-emerald-500/20">
+                                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                  <label className="flex-1 sm:flex-none text-emerald-400 hover:text-emerald-300 text-xs font-bold px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-1 border border-emerald-500/20 whitespace-nowrap">
                                     <Upload className="w-3.5 h-3.5" />
                                     Upload PDF
                                     <input type="file" accept="application/pdf" className="hidden" onChange={(e) => handleInlinePdfSelect(e, selectedStudent, sem, type, null)} />
@@ -680,7 +693,7 @@ export default function App() {
                                       setSelectedStudent(null);
                                       handleOpenAdmin({ rollNo: selectedStudent.rollNo, name: selectedStudent.name, semester: sem, examType: type } as any);
                                     }}
-                                    className="flex-1 sm:flex-none text-sky-400 hover:text-sky-300 text-xs font-bold px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 rounded-lg transition-colors border border-sky-500/20"
+                                    className="flex-1 sm:flex-none text-sky-400 hover:text-sky-300 text-xs font-bold px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 rounded-lg transition-colors border border-sky-500/20 whitespace-nowrap"
                                   >
                                     + Add Details
                                   </button>
@@ -699,7 +712,7 @@ export default function App() {
                                 </span>
                                 
                                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                  <label className="text-emerald-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded border border-emerald-500/20">
+                                  <label className="text-emerald-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded border border-emerald-500/20 whitespace-nowrap">
                                     <Upload className="w-3 h-3" /> PDF
                                     <input type="file" accept="application/pdf" className="hidden" onChange={(e) => handleInlinePdfSelect(e, selectedStudent, sem, type, res.id || null)} />
                                   </label>
@@ -708,13 +721,13 @@ export default function App() {
                                       setSelectedStudent(null);
                                       handleOpenAdmin(res);
                                     }}
-                                    className="text-sky-400 hover:text-sky-300 text-xs flex items-center gap-1 bg-sky-500/10 hover:bg-sky-500/20 px-2 py-1 rounded border border-sky-500/20"
+                                    className="text-sky-400 hover:text-sky-300 text-xs flex items-center gap-1 bg-sky-500/10 hover:bg-sky-500/20 px-2 py-1 rounded border border-sky-500/20 whitespace-nowrap"
                                   >
                                     Edit ✏️
                                   </button>
                                   <button
                                     onClick={(e) => handleDeleteResult(res.id as string, e)}
-                                    className="text-rose-400 hover:text-rose-300 text-xs flex items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded border border-rose-500/20"
+                                    className="text-rose-400 hover:text-rose-300 text-xs flex items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded border border-rose-500/20 whitespace-nowrap"
                                   >
                                     <Trash2 className="w-3 h-3" /> Delete
                                   </button>
@@ -795,6 +808,7 @@ export default function App() {
                   setPasswordInput('');
                   setPasswordError('');
                   setPendingProfileImage(null);
+                  setPendingDeleteId(null);
                 }}
                 className="text-slate-400 hover:text-rose-400 transition-colors p-2 rounded-full hover:bg-slate-800"
               >

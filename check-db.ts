@@ -8,9 +8,7 @@ const db = getFirestore(app, config.firestoreDatabaseId);
 
 async function run() {
   const snap = await getDocs(collection(db, 'results'));
-  console.log(`Found ${snap.size} documents in 'results' collection.`);
-  if (snap.size > 0) {
-    console.log(snap.docs[0].data());
-  }
+  snap.forEach(d => console.log(d.id, d.data()));
+  process.exit(0);
 }
 run();
