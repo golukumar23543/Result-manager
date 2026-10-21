@@ -19,7 +19,8 @@ service cloud.firestore {
         (data.get('pdfData', '') == null || (data.get('pdfData', '') is string && data.get('pdfData', '').size() <= 1500000)) &&
         (data.get('profileImage', '') == null || (data.get('profileImage', '') is string && data.get('profileImage', '').size() <= 1500000)) &&
         (data.get('semester', '') == null || (data.get('semester', '') is string && data.get('semester', '').size() <= 20)) &&
-        (data.get('examType', '') == null || (data.get('examType', '') is string && data.get('examType', '') in ['Regular', 'Compartment']));
+        (data.get('examType', '') == null || (data.get('examType', '') is string && data.get('examType', '') in ['Regular', 'Compartment'])) &&
+        (data.get('studentPassword', '') == null || (data.get('studentPassword', '') is string && data.get('studentPassword', '').size() <= 100));
     }
 
     match /results/{resultId} {
@@ -28,11 +29,11 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isValidResult(request.resource.data) &&
         request.resource.data.createdAt == request.time &&
-        request.resource.data.keys().size() <= 12;
+        request.resource.data.keys().size() <= 15;
       
       allow update: if isValidResult(request.resource.data) &&
         request.resource.data.createdAt == resource.data.createdAt &&
-        request.resource.data.keys().size() <= 12;
+        request.resource.data.keys().size() <= 15;
         
       allow delete: if true;
     }

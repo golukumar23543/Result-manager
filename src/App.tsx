@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent, useMemo } from 'react';
+import { useState, useEffect, useRef, FormEvent, useMemo, ChangeEvent, MouseEvent, SyntheticEvent } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
   getFirestore,
@@ -14,7 +14,27 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import { Search, Plus, Save, Trash2, X, GraduationCap, XCircle, FileText, Upload, Download, User, BookOpen } from 'lucide-react';
+import {
+  Search,
+  Save,
+  Trash2,
+  X,
+  GraduationCap,
+  XCircle,
+  FileText,
+  Upload,
+  Download,
+  User,
+  BookOpen,
+  Lock,
+  Unlock,
+  Key,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  ChevronRight,
+  LogOut
+} from 'lucide-react';
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -31,15 +51,35 @@ interface Result {
   clearStatus: string;
   pdfData?: string;
   profileImage?: string;
+  studentPassword?: string;
   createdAt?: any;
 }
 
 interface StudentGroup {
   rollNo: string;
+  collegeRollNo: string;
   name: string;
   profileImage?: string;
+  studentPassword?: string;
   results: Result[];
 }
+
+export const getCollegeRollNo = (roll: string): string => {
+  if (!roll) return '';
+  const trimmed = roll.trim();
+  const numMatch = trimmed.match(/(\d+)$/);
+  if (numMatch) {
+    const digits = numMatch[1];
+    if (trimmed.startsWith('892510') && digits.length >= 2) {
+      return digits.slice(-2);
+    }
+    if (digits.length >= 2) {
+      return digits.slice(-2);
+    }
+    return digits.padStart(2, '0');
+  }
+  return trimmed;
+};
 
 export default function App() {
   const [results, setResults] = useState<Result[]>([]);
@@ -50,10 +90,18 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Modals
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  // Student unlock states
+  const [unlockedStudentRolls, setUnlockedStudentRolls] = useState<Set<string>>(new Set());
+  const [studentAuthTarget, setStudentAuthTarget] = useState<StudentGroup | null>(null);
+  const [studentPassInput, setStudentPassInput] = useState('');
+  const [studentPassError, setStudentPassError] = useState('');
+  const [showStudentPass, setShowStudentPass] = useState(false);
+
+  // Admin Modals & State
+  const [isAdminPasswordModalOpen, setIsAdminPasswordModalOpen] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [adminPasswordError, setAdminPasswordError] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [pendingEditRec, setPendingEditRec] = useState<Result | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<StudentGroup | null>(null);
   const [pendingProfileImage, setPendingProfileImage] = useState<string | null>(null);
@@ -70,6 +118,7 @@ export default function App() {
   const [editId, setEditId] = useState<string | null>(null);
   const [rollNo, setRollNo] = useState('');
   const [studentName, setStudentName] = useState('');
+  const [studentPassword, setStudentPassword] = useState('');
   const [semester, setSemester] = useState('Semester 1');
   const [examType, setExamType] = useState('Regular');
   const [totalMarks, setTotalMarks] = useState<string>('');
@@ -85,8 +134,8 @@ export default function App() {
       q,
       (snapshot) => {
         const data: Result[] = [];
-        snapshot.forEach((doc) => {
-          data.push({ id: doc.id, ...doc.data() } as Result);
+        snapshot.forEach((d) => {
+          data.push({ id: d.id, ...d.data() } as Result);
         });
         setResults(data);
         setIsLoading(false);
@@ -111,14 +160,17 @@ export default function App() {
     setTimeout(() => {
       setErrorMsg('');
       setSuccessMsg('');
-    }, 3000);
+    }, 3500);
   };
 
   const openAdminWithRecord = (rec?: Result | null) => {
     resetForm();
     if (rec) {
       if (rec.id) setEditId(rec.id);
-      if (rec.rollNo) setRollNo(rec.rollNo);
+      if (rec.rollNo) {
+        setRollNo(rec.rollNo);
+        setStudentPassword(rec.studentPassword || rec.rollNo);
+      }
       if (rec.name) setStudentName(rec.name);
       if (rec.semester) setSemester(rec.semester);
       if (rec.examType) setExamType(rec.examType);
@@ -148,24 +200,55 @@ export default function App() {
     }
   };
 
-  const handleOpenAdmin = (rec?: Result | React.MouseEvent | React.SyntheticEvent) => {
+  // Triple-click on graduation cap to open Admin Panel
+  const capClickCountRef = useRef(0);
+  const capClickTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleCapClick = (e: MouseEvent) => {
+    e.stopPropagation();
+
+    // Browser native triple click detection
+    if (e.detail === 3) {
+      capClickCountRef.current = 0;
+      if (capClickTimerRef.current) clearTimeout(capClickTimerRef.current);
+      handleOpenAdmin();
+      return;
+    }
+
+    // Manual sequential click counter (allows 3 clicks within 1.2s)
+    capClickCountRef.current += 1;
+    if (capClickTimerRef.current) {
+      clearTimeout(capClickTimerRef.current);
+    }
+
+    if (capClickCountRef.current >= 3) {
+      capClickCountRef.current = 0;
+      handleOpenAdmin();
+    } else {
+      capClickTimerRef.current = setTimeout(() => {
+        capClickCountRef.current = 0;
+      }, 1200);
+    }
+  };
+
+  const handleOpenAdmin = (rec?: Result | MouseEvent | SyntheticEvent) => {
     const editRec = (rec && !('nativeEvent' in rec)) ? (rec as Result) : null;
     
     if (isAdminAuthenticated) {
       openAdminWithRecord(editRec);
     } else {
       setPendingEditRec(editRec);
-      setIsPasswordModalOpen(true);
+      setIsAdminPasswordModalOpen(true);
     }
   };
 
-  const handlePasswordSubmit = async (e: FormEvent) => {
+  const handleAdminPasswordSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (passwordInput === 'golu@12') {
+    if (adminPasswordInput === 'golu@12') {
       setIsAdminAuthenticated(true);
-      setIsPasswordModalOpen(false);
-      setPasswordInput('');
-      setPasswordError('');
+      setIsAdminPasswordModalOpen(false);
+      setAdminPasswordInput('');
+      setAdminPasswordError('');
       
       if (pendingProfileImage) {
         await uploadProfileImage(pendingProfileImage);
@@ -190,7 +273,47 @@ export default function App() {
 
       openAdminWithRecord(pendingEditRec);
     } else {
-      setPasswordError('Incorrect password');
+      setAdminPasswordError('Incorrect admin password');
+    }
+  };
+
+  const handleStudentClick = (student: StudentGroup) => {
+    // If admin is already authenticated or student is already unlocked in this session
+    if (isAdminAuthenticated || unlockedStudentRolls.has(student.rollNo)) {
+      setSelectedStudent(student);
+      return;
+    }
+    // Prompt student for password
+    setStudentAuthTarget(student);
+    setStudentPassInput('');
+    setStudentPassError('');
+    setShowStudentPass(false);
+  };
+
+  const handleStudentAuthSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!studentAuthTarget) return;
+
+    const input = studentPassInput.trim();
+    const customPass = studentAuthTarget.studentPassword?.trim();
+    const fullRoll = studentAuthTarget.rollNo.trim();
+
+    // Student password MUST be the full roll number (e.g. 89251001, 89251002...) or custom password set by admin.
+    // Serial number (01, 02) is NOT allowed to unlock.
+    const isMatch =
+      input.toLowerCase() === fullRoll.toLowerCase() ||
+      (customPass && input.toLowerCase() === customPass.toLowerCase()) ||
+      input === 'golu@12';
+
+    if (isMatch) {
+      setUnlockedStudentRolls(prev => new Set(prev).add(studentAuthTarget.rollNo));
+      setSelectedStudent(studentAuthTarget);
+      setStudentAuthTarget(null);
+      setStudentPassInput('');
+      setStudentPassError('');
+      handleAdminAlert(`✅ Welcome, ${studentAuthTarget.name}! Profile unlocked.`, false);
+    } else {
+      setStudentPassError('❌ Incorrect Password! Please enter the correct Roll No or Password.');
     }
   };
 
@@ -218,6 +341,8 @@ export default function App() {
       sMarks = Math.round(sMarks * 100) / 100;
     }
 
+    const passToSave = studentPassword.trim() || formattedRollNo;
+
     const record: any = {
       rollNo: formattedRollNo,
       name: studentName,
@@ -227,6 +352,7 @@ export default function App() {
       sgpa: sMarks,
       carrySubjects,
       clearStatus,
+      studentPassword: passToSave
     };
     
     if (pdfData) {
@@ -238,13 +364,22 @@ export default function App() {
     try {
       if (editId) {
         await updateDoc(doc(db, 'results', editId), record);
-        handleAdminAlert('✅ Record updated!', false);
+        
+        // Also update password across all other records for this student to keep it synced
+        const studentOtherResults = results.filter(r => r.rollNo === formattedRollNo && r.id !== editId);
+        if (studentOtherResults.length > 0) {
+          await Promise.all(
+            studentOtherResults.map(r => updateDoc(doc(db, 'results', r.id!), { studentPassword: passToSave }))
+          );
+        }
+
+        handleAdminAlert('✅ Record & Password updated!', false);
       } else {
         await addDoc(collection(db, 'results'), {
           ...record,
           createdAt: serverTimestamp(),
         });
-        handleAdminAlert('✅ Record added!', false);
+        handleAdminAlert('✅ Record added with student password!', false);
       }
       resetForm();
     } catch (err: any) {
@@ -260,6 +395,7 @@ export default function App() {
     setEditId(null);
     setRollNo('');
     setStudentName('');
+    setStudentPassword('');
     setSemester('Semester 1');
     setExamType('Regular');
     setTotalMarks('');
@@ -271,6 +407,9 @@ export default function App() {
 
   const processInlinePdf = async (data: NonNullable<typeof pendingInlinePdf>) => {
     try {
+      const colRoll = getCollegeRollNo(data.student.rollNo);
+      const studentPass = data.student.studentPassword || colRoll;
+
       if (data.existingId) {
         await updateDoc(doc(db, 'results', data.existingId), { pdfData: data.base64 });
         handleAdminAlert('✅ PDF Updated successfully!', false);
@@ -286,6 +425,7 @@ export default function App() {
           clearStatus: 'Cleared',
           pdfData: data.base64,
           profileImage: data.student.profileImage || '',
+          studentPassword: studentPass,
           createdAt: serverTimestamp()
         });
         handleAdminAlert('✅ Result Created with PDF!', false);
@@ -298,7 +438,7 @@ export default function App() {
     }
   };
 
-  const handleInlinePdfSelect = (e: React.ChangeEvent<HTMLInputElement>, student: StudentGroup, semester: string, examType: string, existingId: string | null) => {
+  const handleInlinePdfSelect = (e: ChangeEvent<HTMLInputElement>, student: StudentGroup, sem: string, type: string, existingId: string | null) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -317,20 +457,20 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = async (event) => {
       const base64 = event.target?.result as string;
-      const data = { base64, student, semester, examType, existingId };
+      const data = { base64, student, semester: sem, examType: type, existingId };
       
       if (isAdminAuthenticated) {
         await processInlinePdf(data);
       } else {
         setPendingInlinePdf(data);
-        setIsPasswordModalOpen(true);
+        setIsAdminPasswordModalOpen(true);
       }
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -347,17 +487,17 @@ export default function App() {
         await uploadProfileImage(base64);
       } else {
         setPendingProfileImage(base64);
-        setIsPasswordModalOpen(true);
+        setIsAdminPasswordModalOpen(true);
       }
     };
     reader.onerror = () => {
       handleAdminAlert('Failed to read image file', true);
-    }
+    };
     reader.readAsDataURL(file);
-    e.target.value = ''; // Reset to allow re-selection
+    e.target.value = '';
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -384,7 +524,7 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  const downloadPdf = (e: React.MouseEvent, base64Data?: string, rollNo?: string) => {
+  const downloadPdf = (e: MouseEvent, base64Data?: string, rNo?: string) => {
     e.stopPropagation();
     if (!base64Data) return;
     
@@ -401,7 +541,7 @@ export default function App() {
       const a = document.createElement('a');
       a.style.display = 'none';
       a.href = url;
-      a.download = `Result_${rollNo || 'document'}.pdf`;
+      a.download = `Result_${rNo || 'document'}.pdf`;
       document.body.appendChild(a);
       a.click();
       
@@ -413,14 +553,14 @@ export default function App() {
       console.error('Error downloading PDF:', err);
       const a = document.createElement('a');
       a.href = base64Data;
-      a.download = `Result_${rollNo || 'document'}.pdf`;
+      a.download = `Result_${rNo || 'document'}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
     }
   };
 
-  const openPdf = (e: React.MouseEvent, base64Data?: string) => {
+  const openPdf = (e: MouseEvent, base64Data?: string) => {
     e.stopPropagation();
     if (!base64Data) return;
     
@@ -440,12 +580,12 @@ export default function App() {
     }
   };
 
-  const handleDeleteResult = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteResult = async (id: string, e: MouseEvent) => {
     e.stopPropagation();
     if (!isAdminAuthenticated) {
       handleAdminAlert('Please login as admin to delete records', true);
       setPendingDeleteId(id);
-      setIsPasswordModalOpen(true);
+      setIsAdminPasswordModalOpen(true);
       return;
     }
     
@@ -460,18 +600,49 @@ export default function App() {
   const groupedStudents = useMemo(() => {
     const groups = new Map<string, StudentGroup>();
     results.forEach(r => {
-      const s = searchTerm.toLowerCase();
-      const matches = r.rollNo.toLowerCase().includes(s) || r.name.toLowerCase().includes(s);
-      if (!matches && searchTerm) return;
+      const colRoll = getCollegeRollNo(r.rollNo);
+      const s = searchTerm.toLowerCase().trim();
+      
+      const numColRoll = parseInt(colRoll, 10).toString();
+      const matches = 
+        !s ||
+        r.rollNo.toLowerCase().includes(s) ||
+        colRoll.toLowerCase().includes(s) ||
+        numColRoll === s ||
+        r.name.toLowerCase().includes(s);
+
+      if (!matches) return;
 
       if (!groups.has(r.rollNo)) {
-        groups.set(r.rollNo, { rollNo: r.rollNo, name: r.name, results: [], profileImage: r.profileImage });
-      } else if (r.profileImage && !groups.get(r.rollNo)!.profileImage) {
-        groups.get(r.rollNo)!.profileImage = r.profileImage;
+        groups.set(r.rollNo, {
+          rollNo: r.rollNo,
+          collegeRollNo: colRoll,
+          name: r.name,
+          results: [],
+          profileImage: r.profileImage,
+          studentPassword: r.studentPassword || r.rollNo
+        });
+      } else {
+        const existing = groups.get(r.rollNo)!;
+        if (r.profileImage && !existing.profileImage) {
+          existing.profileImage = r.profileImage;
+        }
+        if (r.studentPassword && (!existing.studentPassword || existing.studentPassword === r.rollNo)) {
+          existing.studentPassword = r.studentPassword;
+        }
       }
       groups.get(r.rollNo)!.results.push(r);
     });
-    return Array.from(groups.values()).sort((a, b) => a.rollNo.localeCompare(b.rollNo));
+
+    // Natural numeric sort by College Roll (01, 02, 03... 56)
+    return Array.from(groups.values()).sort((a, b) => {
+      const numA = parseInt(a.collegeRollNo, 10);
+      const numB = parseInt(b.collegeRollNo, 10);
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+      return a.collegeRollNo.localeCompare(b.collegeRollNo);
+    });
   }, [results, searchTerm]);
 
   useEffect(() => {
@@ -485,125 +656,166 @@ export default function App() {
     }
   }, [groupedStudents, selectedStudent]);
 
-  const deleteAllRecords = async () => {
-    // Note: confirm might be blocked in iframes
-    const isConfirmed = window.confirm('⚠️ DELETE ALL RECORDS? This cannot be undone!');
-    if (!isConfirmed) return;
-    try {
-      const snapshot = await getDocs(collection(db, 'results'));
-      snapshot.forEach(async (document) => {
-        await deleteDoc(doc(db, 'results', document.id));
-      });
-      handleAdminAlert('✅ All records deleted!', false);
-    } catch (err) {
-      handleAdminAlert('❌ Failed to delete!', true);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0f1e] to-[#0f172f] text-slate-200 p-3 sm:p-6 font-sans">
       <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
+        
+        {/* Header */}
         <header className="bg-slate-800/80 rounded-2xl md:rounded-3xl p-5 md:p-8 flex flex-col md:flex-row justify-between items-center gap-4 border border-sky-400/30 shadow-xl backdrop-blur-sm">
           <div className="space-y-1 text-center md:text-left">
-            <h1
-              className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-purple-400 bg-clip-text text-transparent cursor-pointer select-none flex items-center justify-center md:justify-start gap-2"
-              onDoubleClick={handleOpenAdmin as any}
-            >
-              <GraduationCap className="text-sky-400 w-8 h-8" />
-              Result Manager
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-sky-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent select-none flex items-center justify-center md:justify-start gap-3">
+              <button
+                type="button"
+                onClick={handleCapClick}
+                className="relative group p-1 -m-1 rounded-xl hover:bg-slate-700/50 active:scale-90 transition-all text-sky-400 focus:outline-none cursor-pointer"
+                title="Admin Panel (Click 3 times to open)"
+                aria-label="Admin Panel"
+              >
+                <GraduationCap className="w-9 h-9 transition-transform group-hover:scale-110 group-active:scale-95" />
+                {isAdminAuthenticated && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-slate-800 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                )}
+              </button>
+              <span>Result & Profile Manager</span>
             </h1>
-            <p className="text-slate-400 text-sm">Firebase Database | Permanent Storage | Real-time</p>
+            <p className="text-slate-400 text-sm">
+              Serial No (01, 02, 03...) | Password Protected Profiles | Real-time Database
+            </p>
           </div>
-          <div className="bg-slate-800 border border-sky-400 text-sky-400 px-5 py-2 rounded-full font-medium shadow-[0_0_15px_rgba(56,189,248,0.2)]">
-            👥 Students: {groupedStudents.length}
+          
+          <div className="flex flex-wrap items-center gap-3">
+            {isAdminAuthenticated && (
+              <button
+                onClick={() => setIsAdminAuthenticated(false)}
+                className="bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 px-3.5 py-1.5 rounded-full font-medium text-xs flex items-center gap-1.5 transition-colors"
+                title="Logout from Admin"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Admin Logout</span>
+              </button>
+            )}
+            <div className="bg-slate-900 border border-sky-500/40 text-sky-300 px-4 py-2 rounded-full font-medium text-sm shadow-[0_0_15px_rgba(56,189,248,0.15)] flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-sky-400" />
+              <span>Password Protected</span>
+            </div>
+            <div className="bg-slate-900 border border-sky-400 text-sky-400 px-5 py-2 rounded-full font-medium text-sm shadow-[0_0_15px_rgba(56,189,248,0.2)]">
+              👥 Students: {groupedStudents.length}
+            </div>
           </div>
         </header>
 
+        {/* Main Student Section */}
         <main className="bg-slate-900/85 border border-sky-400/25 rounded-2xl md:rounded-3xl p-4 sm:p-6 md:p-8 shadow-2xl backdrop-blur-md">
-          <h2 className="text-xl font-semibold border-l-4 border-sky-400 pl-4 mb-6 flex items-center gap-2">
-            📋 Student Profiles
-          </h2>
-
-          <div className="flex flex-col sm:flex-row gap-3 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-              <input
-                type="text"
-                placeholder="Search by Roll No or Name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-2xl py-3 pl-10 pr-4 focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all placeholder:text-slate-600"
-              />
-            </div>
-            <button
-              onClick={() => setSearchTerm('')}
-              className="bg-slate-800 hover:bg-slate-700 border border-slate-600 px-6 py-3 rounded-2xl transition-colors font-medium whitespace-nowrap"
-            >
-              Clear
-            </button>
-            <button
-               onClick={handleOpenAdmin as any}
-               className="bg-sky-500 hover:bg-sky-400 text-slate-900 px-6 py-3 rounded-2xl font-bold transition-colors whitespace-nowrap shadow-lg shadow-sky-500/20"
-            >
-              Open Admin
-            </button>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-6">
+            <h2 className="text-xl font-semibold border-l-4 border-sky-400 pl-4 flex items-center gap-2">
+              📋 Student Profiles
+            </h2>
+            <span className="text-xs text-slate-400 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-amber-400" /> Password Protected
+            </span>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-700/50">
+          {/* Search Bar */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search by Roll No (01, 02..) or Student Name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded-2xl py-3 pl-11 pr-4 focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all placeholder:text-slate-600 text-sm sm:text-base"
+              />
+            </div>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="bg-slate-800 hover:bg-slate-700 border border-slate-600 px-5 py-3 rounded-2xl transition-colors font-medium whitespace-nowrap text-sm"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Students Table */}
+          <div className="overflow-x-auto rounded-xl border border-slate-700/60 shadow-inner">
             <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
               <thead>
-                <tr className="bg-slate-800/80 text-sky-200 border-b border-slate-700">
-                  <th className="p-4 font-semibold w-32">Roll No</th>
+                <tr className="bg-slate-800/90 text-sky-200 border-b border-slate-700 text-xs sm:text-sm uppercase tracking-wider">
+                  <th className="p-4 font-semibold w-28 text-center">College Roll</th>
                   <th className="p-4 font-semibold">Student Name</th>
-                  <th className="p-4 font-semibold w-40">Total Records</th>
-                  <th className="p-4 font-semibold w-32 text-right">Action</th>
+                  <th className="p-4 font-semibold w-36 text-center">Records</th>
+                  <th className="p-4 font-semibold w-40 text-right">Access</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80">
+              <tbody className="divide-y divide-slate-800/80 text-sm">
                 {isLoading ? (
                   <tr>
                     <td colSpan={4} className="p-8 text-center text-sky-400/80 animate-pulse">
-                      🔄 Loading data from Firebase...
+                      🔄 Loading student records from Firebase...
                     </td>
                   </tr>
                 ) : groupedStudents.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="p-8 text-center text-slate-500">
-                      📭 No students found
+                      📭 No students found matching your search.
                     </td>
                   </tr>
                 ) : (
-                  groupedStudents.map((student) => (
-                    <tr
-                      key={student.rollNo}
-                      className="hover:bg-sky-500/5 transition-colors cursor-pointer group"
-                      onClick={() => setSelectedStudent(student)}
-                    >
-                      <td className="p-4">
-                        <strong className="text-yellow-400 group-hover:text-yellow-300 transition-colors">
-                          {student.rollNo}
-                        </strong>
-                      </td>
-                      <td className="p-4 font-medium text-amber-200/90 flex items-center gap-3">
-                        {student.profileImage ? (
-                          <img src={student.profileImage} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-700/50 shrink-0" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-slate-800/80 flex items-center justify-center border border-slate-700/50 shrink-0">
-                            <User className="w-4 h-4 text-slate-500" />
-                          </div>
-                        )}
-                        <span className="truncate max-w-[150px] sm:max-w-none">{student.name}</span>
-                      </td>
-                      <td className="p-4 text-slate-300">
-                        <span className="bg-[#0f3b4c] text-sky-300 px-3 py-1 rounded-full text-xs sm:text-sm font-medium border border-sky-400/20">
-                          {student.results.length} Results
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                         <span className="text-sky-400 text-sm font-semibold group-hover:underline">View Profile &rarr;</span>
-                      </td>
-                    </tr>
-                  ))
+                  groupedStudents.map((student) => {
+                    const isUnlocked = isAdminAuthenticated || unlockedStudentRolls.has(student.rollNo);
+
+                    return (
+                      <tr
+                        key={student.rollNo}
+                        className="hover:bg-sky-500/5 transition-colors cursor-pointer group"
+                        onClick={() => handleStudentClick(student)}
+                      >
+                        {/* College Roll Serial Badge (01, 02, 03...) */}
+                        <td className="p-4 text-center">
+                          <span className="inline-flex items-center justify-center min-w-[2.2rem] px-2.5 py-1 bg-amber-500/10 text-amber-300 group-hover:bg-amber-500/20 border border-amber-500/30 font-mono font-bold rounded-lg text-sm transition-colors shadow-sm">
+                            {student.collegeRollNo}
+                          </span>
+                        </td>
+
+                        {/* Student Name */}
+                        <td className="p-4 font-medium text-slate-100 flex items-center gap-3">
+                          {student.profileImage ? (
+                            <img
+                              src={student.profileImage}
+                              alt=""
+                              className="w-9 h-9 rounded-full object-cover border border-slate-700/60 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700/60 shrink-0">
+                              <User className="w-4 h-4 text-slate-400" />
+                            </div>
+                          )}
+                          <span className="truncate max-w-[180px] sm:max-w-xs">{student.name}</span>
+                        </td>
+
+                        {/* Total Records */}
+                        <td className="p-4 text-center">
+                          <span className="bg-[#0f3b4c] text-sky-300 px-3 py-1 rounded-full text-xs font-semibold border border-sky-400/20">
+                            {student.results.length} Semesters
+                          </span>
+                        </td>
+
+                        {/* Action / Lock Status */}
+                        <td className="p-4 text-right">
+                          {isUnlocked ? (
+                            <span className="inline-flex items-center gap-1.5 text-emerald-400 text-xs font-semibold bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 group-hover:bg-emerald-500/20 transition-all">
+                              <Unlock className="w-3.5 h-3.5" /> View Profile &rarr;
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-sky-400 text-xs font-semibold bg-sky-500/10 px-3 py-1.5 rounded-lg border border-sky-500/20 group-hover:bg-sky-500/20 transition-all">
+                              <Lock className="w-3.5 h-3.5 text-amber-400" /> Unlock &rarr;
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -611,16 +823,171 @@ export default function App() {
         </main>
       </div>
 
-      {/* Global Alerts */}
+      {/* Global Toast Alert */}
       {(errorMsg || successMsg) && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-full max-w-md px-4 pointer-events-none">
           <div
             className={`p-4 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-bold border backdrop-blur-md pointer-events-auto transition-all animate-in fade-in slide-in-from-top-4 ${
-              errorMsg ? 'bg-rose-950/90 border-rose-800/80 text-rose-200' : 'bg-emerald-950/90 border-emerald-800/80 text-emerald-200'
+              errorMsg
+                ? 'bg-rose-950/95 border-rose-800 text-rose-200'
+                : 'bg-emerald-950/95 border-emerald-800 text-emerald-200'
             }`}
           >
-             {errorMsg ? <XCircle className="w-6 h-6 shrink-0 text-rose-400" /> : <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">✓</div>}
-             {errorMsg || successMsg}
+             {errorMsg ? (
+               <XCircle className="w-5 h-5 shrink-0 text-rose-400" />
+             ) : (
+               <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">✓</div>
+             )}
+             <span>{errorMsg || successMsg}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Student Profile Password Verification Modal */}
+      {studentAuthTarget && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[60] flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-md rounded-2xl md:rounded-3xl p-6 shadow-2xl relative animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-start mb-5">
+              <div className="flex items-center gap-3">
+                {studentAuthTarget.profileImage ? (
+                  <img
+                    src={studentAuthTarget.profileImage}
+                    alt=""
+                    className="w-12 h-12 rounded-2xl object-cover border border-sky-400/40"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-400/30 flex items-center justify-center">
+                    <User className="w-6 h-6 text-sky-400" />
+                  </div>
+                )}
+                <div>
+                  <h3 className="font-bold text-lg text-slate-100">{studentAuthTarget.name}</h3>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      College Roll: {studentAuthTarget.collegeRollNo}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setStudentAuthTarget(null);
+                  setStudentPassInput('');
+                  setStudentPassError('');
+                }}
+                className="text-slate-400 hover:text-rose-400 transition-colors p-1.5 rounded-full hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 mb-5 flex items-start gap-2.5">
+              <Lock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 leading-relaxed">
+                <p className="font-semibold text-slate-100 mb-0.5">Profile Locked for Privacy</p>
+                <p>Apna profile unlock karne ke liye apna <strong>Roll No / Password</strong> enter karein.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleStudentAuthSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5 ml-1">
+                  <span>Enter Roll No / Password</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showStudentPass ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    placeholder="Enter your Roll No / Password"
+                    value={studentPassInput}
+                    onChange={(e) => {
+                      setStudentPassInput(e.target.value);
+                      if (studentPassError) setStudentPassError('');
+                    }}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-sky-400 focus:ring-1 focus:ring-sky-400 rounded-xl px-4 py-3 pr-11 text-slate-100 placeholder:text-slate-600 transition-all outline-none font-mono tracking-wider"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowStudentPass(!showStudentPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-1"
+                  >
+                    {showStudentPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {studentPassError && (
+                  <p className="text-rose-400 text-xs sm:text-sm mt-2 ml-1 animate-pulse font-medium">
+                    {studentPassError}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2"
+              >
+                <Unlock className="w-4 h-4" />
+                Unlock Profile
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Password Modal Overlay */}
+      {isAdminPasswordModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[65] flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-sm rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-2xl relative animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-sky-400 flex items-center gap-2">
+                <Key className="w-5 h-5" /> Admin Access
+              </h2>
+              <button
+                onClick={() => {
+                  setIsAdminPasswordModalOpen(false);
+                  setAdminPasswordInput('');
+                  setAdminPasswordError('');
+                  setPendingProfileImage(null);
+                  setPendingDeleteId(null);
+                }}
+                className="text-slate-400 hover:text-rose-400 transition-colors p-2 rounded-full hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleAdminPasswordSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-1.5 ml-1">Admin Password</label>
+                <div className="relative">
+                  <input
+                    type={showAdminPassword ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    placeholder="Enter admin password"
+                    value={adminPasswordInput}
+                    onChange={(e) => setAdminPasswordInput(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl px-4 py-3 pr-11 placeholder:text-slate-600 transition-all outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-1"
+                  >
+                    {showAdminPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {adminPasswordError && (
+                  <p className="text-rose-400 text-sm mt-2 ml-1">{adminPasswordError}</p>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-sky-500/25"
+              >
+                Verify & Continue
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -630,26 +997,46 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
           <div className="bg-slate-900 border border-sky-500/50 w-full max-w-4xl rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl relative max-h-[95vh] sm:max-h-[90vh] flex flex-col">
             
-            <div className="flex justify-between items-start mb-5 sm:mb-6 shrink-0">
+            {/* Profile Header */}
+            <div className="flex justify-between items-start mb-5 sm:mb-6 shrink-0 border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3 sm:gap-4">
                 <div className="relative group">
                   {selectedStudent.profileImage ? (
-                    <img src={selectedStudent.profileImage} alt={selectedStudent.name} className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl object-cover border border-sky-500/50 shadow-lg" />
+                    <img
+                      src={selectedStudent.profileImage}
+                      alt={selectedStudent.name}
+                      className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border border-sky-500/50 shadow-lg"
+                    />
                   ) : (
-                    <div className="bg-sky-500/20 p-2 sm:p-3 rounded-xl sm:rounded-2xl border border-sky-500/30 w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center shadow-lg">
-                      <User className="w-6 h-6 sm:w-8 sm:h-8 text-sky-400" />
+                    <div className="bg-sky-500/20 p-2 sm:p-3 rounded-2xl border border-sky-500/30 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center shadow-lg">
+                      <User className="w-7 h-7 sm:w-9 sm:h-9 text-sky-400" />
                     </div>
                   )}
-                  <label className="absolute inset-0 bg-slate-950/70 rounded-xl sm:rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity backdrop-blur-sm border border-sky-400/50">
+                  <label className="absolute inset-0 bg-slate-950/70 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity backdrop-blur-sm border border-sky-400/50">
                     <Upload className="w-5 h-5 text-white" />
                     <input type="file" accept="image/*" className="hidden" onChange={handleProfileImageSelect} />
                   </label>
                 </div>
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-slate-100 truncate max-w-[200px] sm:max-w-[400px]">{selectedStudent.name}</h2>
-                  <p className="text-sky-400 font-mono mt-0.5 sm:mt-1 text-sm sm:text-base">{selectedStudent.rollNo}</p>
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-100 truncate max-w-[200px] sm:max-w-[400px]">
+                    {selectedStudent.name}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className="px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      College Roll: {selectedStudent.collegeRollNo}
+                    </span>
+                    <span className="text-slate-400 font-mono text-xs sm:text-sm">
+                      Exam Roll: {selectedStudent.rollNo}
+                    </span>
+                    {isAdminAuthenticated && (
+                      <span className="px-2 py-0.5 rounded text-xs bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">
+                        🔑 Pass: {selectedStudent.studentPassword || selectedStudent.rollNo}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
+
               <button
                 onClick={() => setSelectedStudent(null)}
                 className="text-slate-400 hover:text-rose-400 transition-colors p-2 rounded-full hover:bg-slate-800 bg-slate-800/50"
@@ -658,6 +1045,7 @@ export default function App() {
               </button>
             </div>
 
+            {/* Semesters Grid */}
             <div className="overflow-y-auto pr-2 pb-4 flex-1">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4', 'Semester 5', 'Semester 6'].map(sem => {
@@ -691,7 +1079,13 @@ export default function App() {
                                   <button
                                     onClick={() => {
                                       setSelectedStudent(null);
-                                      handleOpenAdmin({ rollNo: selectedStudent.rollNo, name: selectedStudent.name, semester: sem, examType: type } as any);
+                                      handleOpenAdmin({
+                                        rollNo: selectedStudent.rollNo,
+                                        name: selectedStudent.name,
+                                        semester: sem,
+                                        examType: type,
+                                        studentPassword: selectedStudent.studentPassword
+                                      } as any);
                                     }}
                                     className="flex-1 sm:flex-none text-sky-400 hover:text-sky-300 text-xs font-bold px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 rounded-lg transition-colors border border-sky-500/20 whitespace-nowrap"
                                   >
@@ -747,7 +1141,7 @@ export default function App() {
                               
                               <div className="mb-3">
                                 <p className="text-slate-500 text-xs mb-0.5">Status</p>
-                                <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium border ${
+                                <span className={`inline-block px-2.5 py-0.5 rounded text-xs font-medium border ${
                                   res.clearStatus === 'Cleared'
                                     ? 'bg-green-900/30 text-green-400 border-green-800/50'
                                     : res.clearStatus === 'Partially Cleared'
@@ -794,55 +1188,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Password Modal Overlay */}
-      {isPasswordModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[60] flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-sm rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-2xl relative">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-sky-400 flex items-center gap-2">
-                🔒 Admin Access
-              </h2>
-              <button
-                onClick={() => {
-                  setIsPasswordModalOpen(false);
-                  setPasswordInput('');
-                  setPasswordError('');
-                  setPendingProfileImage(null);
-                  setPendingDeleteId(null);
-                }}
-                className="text-slate-400 hover:text-rose-400 transition-colors p-2 rounded-full hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1.5 ml-1">Password</label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter admin password"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl px-4 py-3 placeholder:text-slate-600 transition-all outline-none"
-                />
-                {passwordError && (
-                  <p className="text-rose-400 text-sm mt-2 ml-1">{passwordError}</p>
-                )}
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-sky-500/25"
-              >
-                Submit
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Admin Panel Overlay */}
+      {/* Admin Panel Modal Overlay */}
       {isAdminOpen && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[70] flex items-center justify-center p-2 sm:p-4">
           <div className="bg-slate-900 border border-sky-500/50 w-full max-w-lg rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-2xl relative max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
@@ -890,13 +1236,26 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1.5 ml-1">🎫 Roll Number *</label>
+                <label className="block text-sm font-medium text-slate-400 mb-1.5 ml-1 flex items-center justify-between">
+                  <span>🎫 Roll Number *</span>
+                  {rollNo && (
+                    <span className="text-xs text-amber-300 font-mono">
+                      College Roll: {getCollegeRollNo(rollNo)}
+                    </span>
+                  )}
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g., CS24001"
+                  placeholder="e.g., 01 or 89251001"
                   value={rollNo}
-                  onChange={(e) => setRollNo(e.target.value)}
+                  onChange={(e) => {
+                    const newRoll = e.target.value;
+                    setRollNo(newRoll);
+                    if (!studentPassword) {
+                      // auto suggest college roll no as password
+                    }
+                  }}
                   className="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl px-4 py-3 placeholder:text-slate-600 transition-all outline-none"
                 />
               </div>
@@ -911,6 +1270,24 @@ export default function App() {
                   onChange={(e) => setStudentName(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl px-4 py-3 placeholder:text-slate-600 transition-all outline-none"
                 />
+              </div>
+
+              {/* Password Setting Option */}
+              <div className="bg-slate-950/70 border border-amber-500/30 rounded-xl p-3.5 space-y-1.5">
+                <label className="block text-sm font-medium text-amber-300 ml-1 flex items-center gap-1.5">
+                  <Key className="w-4 h-4 text-amber-400" />
+                  <span>Student Profile Password / Passcode</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder={rollNo ? `Default: ${rollNo} (or custom password)` : 'Default: Roll No (e.g. 89251001)'}
+                  value={studentPassword}
+                  onChange={(e) => setStudentPassword(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 rounded-xl px-4 py-2.5 text-slate-100 placeholder:text-slate-600 transition-all outline-none text-sm font-mono"
+                />
+                <p className="text-xs text-slate-400 ml-1">
+                  💡 Agar khali chhodenge toh automatically unka Roll No (e.g. <strong>{rollNo || '89251001'}</strong>) default password ban jayega.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -932,7 +1309,7 @@ export default function App() {
                   <input
                     type="number"
                     min="0"
-                    max="10"
+                    max="100"
                     step="0.01"
                     placeholder="Auto from marks"
                     value={sgpa}
@@ -1012,7 +1389,7 @@ export default function App() {
                   className="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2"
                 >
                   <Save className="w-5 h-5" />
-                  {editId ? 'Update Record' : 'Save Record'}
+                  {editId ? 'Update Record & Password' : 'Save Record & Password'}
                 </button>
               </div>
             </form>

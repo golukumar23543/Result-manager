@@ -11,6 +11,7 @@
         "sgpa": { "type": "number" },
         "carrySubjects": { "type": "string" },
         "clearStatus": { "type": "string", "enum": ["Cleared", "Not Cleared", "Partially Cleared"] },
+        "studentPassword": { "type": "string" },
         "createdAt": { "type": "object" }
       },
       "required": ["rollNo", "name", "clearStatus", "createdAt"]
