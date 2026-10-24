@@ -36,7 +36,8 @@ import {
   ShieldCheck,
   ChevronRight,
   LogOut,
-  Heart
+  Heart,
+  ArrowLeft
 } from 'lucide-react';
 
 const app = initializeApp(firebaseConfig);
@@ -1010,13 +1011,28 @@ export default function App() {
                 )}
               </div>
 
-              <button
-                type="submit"
-                className="w-full bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2"
-              >
-                <Unlock className="w-4 h-4" />
-                Unlock Profile
-              </button>
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStudentAuthTarget(null);
+                    setStudentPassInput('');
+                    setStudentPassError('');
+                  }}
+                  className="px-4 py-3 bg-slate-800 hover:bg-slate-700 active:bg-slate-750 text-slate-200 font-semibold rounded-xl transition-all border border-slate-700 flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:border-slate-600"
+                >
+                  <ArrowLeft className="w-4 h-4 text-slate-400" />
+                  <span>Back</span>
+                </button>
+
+                <button
+                  type="submit"
+                  className="flex-1 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Unlock className="w-4 h-4" />
+                  <span>Unlock Profile</span>
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -1069,12 +1085,28 @@ export default function App() {
                   <p className="text-rose-400 text-sm mt-2 ml-1">{adminPasswordError}</p>
                 )}
               </div>
-              <button
-                type="submit"
-                className="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-sky-500/25"
-              >
-                Verify & Continue
-              </button>
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminPasswordModalOpen(false);
+                    setAdminPasswordInput('');
+                    setAdminPasswordError('');
+                    setPendingProfileImage(null);
+                    setPendingDeleteId(null);
+                  }}
+                  className="px-4 py-3 bg-slate-800 hover:bg-slate-750 active:bg-slate-700 text-slate-300 hover:text-white font-medium rounded-xl transition-all border border-slate-700 flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:border-slate-600"
+                >
+                  <ArrowLeft className="w-4 h-4 text-slate-400" />
+                  <span>Back</span>
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-sky-500/25 cursor-pointer"
+                >
+                  Verify & Continue
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -1125,12 +1157,24 @@ export default function App() {
                 </div>
               </div>
 
-              <button
-                onClick={() => setSelectedStudent(null)}
-                className="text-slate-400 hover:text-rose-400 transition-colors p-2 rounded-full hover:bg-slate-800 bg-slate-800/50"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedStudent(null)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs sm:text-sm font-medium transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4 text-slate-400" />
+                  <span>Back</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStudent(null)}
+                  className="text-slate-400 hover:text-rose-400 transition-colors p-2 rounded-full hover:bg-slate-800 bg-slate-800/50"
+                  title="Close"
+                >
+                  <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                </button>
+              </div>
             </div>
 
             {/* Semesters Grid */}
@@ -1288,16 +1332,32 @@ export default function App() {
                   🔐 ADMIN PANEL
                 </h2>
               </div>
-              <button
-                onClick={() => {
-                  setIsAdminOpen(false);
-                  setIsAdminAuthenticated(false);
-                  resetForm();
-                }}
-                className="text-slate-400 hover:text-rose-400 transition-colors p-2 rounded-full hover:bg-slate-800"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminOpen(false);
+                    setIsAdminAuthenticated(false);
+                    resetForm();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs sm:text-sm font-medium transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4 text-slate-400" />
+                  <span>Back</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminOpen(false);
+                    setIsAdminAuthenticated(false);
+                    resetForm();
+                  }}
+                  className="text-slate-400 hover:text-rose-400 transition-colors p-2 rounded-full hover:bg-slate-800"
+                  title="Close"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleSave} className="space-y-4">
