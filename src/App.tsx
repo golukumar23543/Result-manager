@@ -14,6 +14,8 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+import TermsAndConditions from './components/TermsAndConditions';
+import PrivacyPolicy from './components/PrivacyPolicy';
 import {
   Search,
   Save,
@@ -33,7 +35,8 @@ import {
   EyeOff,
   ShieldCheck,
   ChevronRight,
-  LogOut
+  LogOut,
+  Heart
 } from 'lucide-react';
 
 const app = initializeApp(firebaseConfig);
@@ -82,6 +85,7 @@ export const getCollegeRollNo = (roll: string): string => {
 };
 
 export default function App() {
+  const [activeView, setActiveView] = useState<'portal' | 'terms' | 'privacy'>('portal');
   const [results, setResults] = useState<Result[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
@@ -89,6 +93,21 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [pageViews] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('nsit_portal_page_views');
+      if (!stored) {
+        localStorage.setItem('nsit_portal_page_views', '500');
+        return 500;
+      }
+      const count = parseInt(stored, 10);
+      const next = isNaN(count) || count < 500 ? 500 : count + 1;
+      localStorage.setItem('nsit_portal_page_views', next.toString());
+      return next;
+    } catch {
+      return 500;
+    }
+  });
 
   // Student unlock states
   const [unlockedStudentRolls, setUnlockedStudentRolls] = useState<Set<string>>(new Set());
@@ -656,12 +675,30 @@ export default function App() {
     }
   }, [groupedStudents, selectedStudent]);
 
+  if (activeView === 'terms') {
+    return (
+      <TermsAndConditions
+        onBack={() => setActiveView('portal')}
+        onNavigateToPrivacy={() => setActiveView('privacy')}
+      />
+    );
+  }
+
+  if (activeView === 'privacy') {
+    return (
+      <PrivacyPolicy
+        onBack={() => setActiveView('portal')}
+        onNavigateToTerms={() => setActiveView('terms')}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0f1e] to-[#0f172f] text-slate-200 p-3 sm:p-6 font-sans">
-      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0f1e] to-[#0f172f] text-slate-200 p-3 sm:p-6 font-sans relative overflow-x-hidden">
+      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6 relative z-10">
         
         {/* Header */}
-        <header className="bg-slate-800/80 rounded-2xl md:rounded-3xl p-5 md:p-8 flex flex-col md:flex-row justify-between items-center gap-4 border border-sky-400/30 shadow-xl backdrop-blur-sm">
+        <header className="bg-slate-800/80 rounded-2xl md:rounded-3xl p-5 md:p-8 flex flex-col md:flex-row justify-between items-center gap-4 border border-sky-400/30 shadow-xl backdrop-blur-sm relative overflow-hidden">
           <div className="space-y-1 text-center md:text-left">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-sky-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent select-none flex items-center justify-center md:justify-start gap-3">
               <button
@@ -676,10 +713,10 @@ export default function App() {
                   <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-slate-800 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
                 )}
               </button>
-              <span>Result & Profile Manager</span>
+              <span>NSIT Result &amp; Profile Portal</span>
             </h1>
             <p className="text-slate-400 text-sm">
-              Serial No (01, 02, 03...) | Password Protected Profiles | Real-time Database
+              Netaji Subhas Institute of Technology (NSIT), Bihta, Patna &bull; Password Protected Profiles
             </p>
           </div>
           
@@ -821,6 +858,57 @@ export default function App() {
             </table>
           </div>
         </main>
+
+        {/* Footer matching exact reference */}
+        <footer className="mt-8 pt-6 pb-6 border-t border-slate-800/80">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-4 text-xs sm:text-sm text-slate-400">
+            {/* Left: Copyright */}
+            <div className="text-center lg:text-left text-slate-400">
+              <span>&copy; 2026 </span>
+              <a
+                href="https://mrgolu.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sky-400 font-semibold hover:underline hover:text-sky-300 transition-colors inline-block"
+                title="Visit Mr. Golu's Portfolio"
+              >
+                Mr. Golu
+              </a>
+              <span> . All rights reserved.</span>
+            </div>
+
+            {/* Center-Left: Page Views Counter Badge */}
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-slate-700/70 bg-slate-900/60 text-xs text-slate-400 shadow-sm">
+              <Eye className="w-3.5 h-3.5 text-slate-400" />
+              <span>{pageViews} total page views</span>
+            </div>
+
+            {/* Center-Right: Made with in Patna */}
+            <div className="text-center text-slate-400 flex items-center justify-center gap-1.5">
+              <span>Made with</span>
+              <Heart className="w-3.5 h-3.5 text-rose-500 fill-none stroke-[2] inline" />
+              <span>in Patna, Bihar, India</span>
+            </div>
+
+            {/* Right: Privacy Policy & Terms of Use */}
+            <div className="flex items-center gap-6 text-slate-400">
+              <button
+                type="button"
+                onClick={() => setActiveView('privacy')}
+                className="hover:text-slate-200 transition-colors cursor-pointer"
+              >
+                Privacy Policy
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView('terms')}
+                className="hover:text-slate-200 transition-colors cursor-pointer"
+              >
+                Terms of Use
+              </button>
+            </div>
+          </div>
+        </footer>
       </div>
 
       {/* Global Toast Alert */}
@@ -846,7 +934,7 @@ export default function App() {
       {/* Student Profile Password Verification Modal */}
       {studentAuthTarget && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[60] flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-md rounded-2xl md:rounded-3xl p-6 shadow-2xl relative animate-in fade-in zoom-in-95">
+          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-md rounded-2xl md:rounded-3xl p-6 shadow-2xl relative animate-in fade-in zoom-in-95 overflow-hidden">
             <div className="flex justify-between items-start mb-5">
               <div className="flex items-center gap-3">
                 {studentAuthTarget.profileImage ? (
@@ -995,10 +1083,10 @@ export default function App() {
       {/* Student Profile Modal */}
       {selectedStudent && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
-          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-4xl rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl relative max-h-[95vh] sm:max-h-[90vh] flex flex-col">
-            
+          <div className="bg-slate-900 border border-sky-500/50 w-full max-w-4xl rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl relative max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+
             {/* Profile Header */}
-            <div className="flex justify-between items-start mb-5 sm:mb-6 shrink-0 border-b border-slate-800 pb-4">
+            <div className="flex justify-between items-start mb-5 sm:mb-6 shrink-0 border-b border-slate-800 pb-4 relative z-10">
               <div className="flex items-center gap-3 sm:gap-4">
                 <div className="relative group">
                   {selectedStudent.profileImage ? (
@@ -1046,16 +1134,18 @@ export default function App() {
             </div>
 
             {/* Semesters Grid */}
-            <div className="overflow-y-auto pr-2 pb-4 flex-1">
+            <div className="overflow-y-auto pr-2 pb-4 flex-1 relative z-10">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4', 'Semester 5', 'Semester 6'].map(sem => {
                   const semResults = selectedStudent.results.filter(r => (r.semester || 'Semester 1') === sem);
                   
                   return (
-                    <div key={sem} className="bg-slate-950/50 border border-slate-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 flex flex-col gap-3 sm:gap-4">
-                      <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-                        <BookOpen className="w-5 h-5 text-indigo-400" />
-                        <h3 className="font-bold text-lg text-indigo-100">{sem}</h3>
+                    <div key={sem} className="bg-slate-950/60 border border-slate-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 flex flex-col gap-3 sm:gap-4 relative overflow-hidden">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="w-5 h-5 text-indigo-400" />
+                          <h3 className="font-bold text-lg text-indigo-100">{sem}</h3>
+                        </div>
                       </div>
                       
                       <div className="space-y-4">
@@ -1193,9 +1283,11 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[70] flex items-center justify-center p-2 sm:p-4">
           <div className="bg-slate-900 border border-sky-500/50 w-full max-w-lg rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-2xl relative max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-sky-400 flex items-center gap-2">
-                🔐 ADMIN PANEL
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-2xl font-bold text-sky-400 flex items-center gap-2">
+                  🔐 ADMIN PANEL
+                </h2>
+              </div>
               <button
                 onClick={() => {
                   setIsAdminOpen(false);
